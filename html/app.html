@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="app.build.css">
+
+    <script type="text/javascript">
+    "use strict";
+
+    // conditional synchrounous script loading of polyfills, for IE11 (IE 10 and below not supported)
+    if(!window.Promise){
+        var r = new XMLHttpRequest();
+        r.open('GET', 'polyfill/es6-promise.min.js', false);
+        r.send();
+        eval(r.responseText);
+    }
+
+    // Auth stuff gets top priority as it can take a while....
+    var window_location_to_params_object = function(){
+        // http://stackoverflow.com/a/2880929/2399799
+        var match;
+        var pl = /\+/g;  // Regex for replacing addition symbol with a space
+        var search = /([^&=]+)=?([^&]*)/g;
+        var decode = function (s) { return decodeURIComponent(s.replace(pl, " ")); };
+        var query  = window.location.search.substring(1);
+        var url_params = {};
+        while((match = search.exec(query)) !== null)
+           url_params[decode(match[1])] = decode(match[2]);
+        return url_params;
+    }
+    var dn = {};
+    dn.client_id = '591525900269-94ok9krafau8qa24666btvccmsfnq5fp.apps.googleusercontent.com';
+    dn.scopes = [
+      'https://www.googleapis.com/auth/drive.file',
+      'https://www.googleapis.com/auth/userinfo.profile',
+      'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/drive.appdata'
+    ];
+    dn.url_user_id = (function(){
+        try{
+            var params = window_location_to_params_object();
+            return JSON.parse(params['state'])['userId'];
+        }catch(e){return undefined}
+    })();
+    dn.auth_map = function(immeditate){
+        var m = {
+        'client_id': dn.client_id, 
+        'scope': dn.scopes.join(' '),
+        'immediate': immeditate};
+        if (dn.url_user_id !== undefined){
+            m['login_hint'] = dn.url_user_id;
+            m['authuser'] = -1
+        }
+        return m;
+    }
+    dn.const_ = {auth_timeout: 6000};
+    /* 
+    SpecialPromise: a *variation* on the concept of a promise.  Explanation by example:
+
+    var failure_count = 0;
+    var sp = new SpecialPromise();
+    sp.on_error(function(e){
+        failure_count++;
+        console.log("Func A.  Failed err=" + e);
+        setTimeout(function(){
+            if(failure_count < 3) 
+                sp.reject(43 + failure_count); //simulate some errors with incrementing error number
+            else
+                sp.resolve(42);
+        }, 500)
+    });
+    sp.on_success(function(v){ console.log("Func B. Success: " + v);});
+    sp.then(function(v){ console.log("Func C. Success: " + v); });
+    sp.then(function(v){ console.log("Func D. Success: " + v); });
+    sp.resolve(41);
+    sp.then(function(v){ console.log("Func E. Success: " + v) });
+    sp.reject(43);
+    sp.then(function(v){ console.log("Func F. Success: " + v) });
+    setTimeout(function(){
+        console.log("registering Func G.")
+        sp.then(function(v){ console.log("Func G. Success: " + v) });
+    }, 5000);
+
+    Gives output:
+        Func B. Success: 41
+        Func C. Success: 41
+        Func D. Success: 41
+        Func E. Success: 41
+        Func A. Failed err=43
+        <500ms pause>
+        Func A. Failed err=44
+        <500ms pause>
+        Func A. Failed err=45
+        <500ms pause>
+        Func B. Success: 42
+        Func F. Success: 42
+        <3500ms pause>
+        Registering Func G.
+        Fun G. Success: 42
+    */
+    var SpecialPromise = function(){
+        this._success_callbacks = []; // registered with .then, these are only called once each
+        this._success_handler = undefined; // registered with on_success, called with every .resolve
+        this._error_handler = undefined; // registered with on_error, called with every .reject and when errors occur in _success_handler
+        this._state = 0; // 1 = resolved; 0=currently unresolved, with all errors already handled; -1=error not yet handled
+        this._value;
+        return this;
+    }
+    SpecialPromise.prototype.on_error = function(handler){
+        if(this._state == -1){
+            this._state = 0;
+            handler(this._value);
+        } else {
+            this._error_handler = handler;        
+        }
+    }
+    SpecialPromise.prototype.on_success = function(handler){
+        if(this._state == 1)
+            handler(this._value);
+        else
+            this._success_handler = handler;        
+    }
+    SpecialPromise.prototype.then = function(succ){
+        if(this._state === 1)
+            succ(this._value);
+        else 
+            this._success_callbacks.push(succ);
+    }
+    SpecialPromise.prototype.resolve = function(val){
+        if(this._success_handler){
+            try{
+                this._success_handler(val);
+            } catch(e){
+                this.reject(e);
+                return;
+            }
+        }
+        this._state = 1;
+        this._value = val;
+        while(this._success_callbacks.length)
+            this._success_callbacks.shift()(val);
+    }
+    SpecialPromise.prototype.reject = function(err){
+        this._value = err;
+        if(this._error_handler !== undefined){
+            this._state = 0;
+            this._error_handler(err);
+        }else{
+            this._state = -1;
+        }
+    }
+    SpecialPromise.prototype.is_resolved = function(){ 
+        return this._state === 1;
+    }
+    dn.pr_auth = new SpecialPromise();
+    dn.pr_realtime_loaded = new SpecialPromise();
+    var make_timeout = function(delay, error_msg){
+        return new Promise(function(resolve, reject){
+            setTimeout(reject, delay, error_msg || "timeout");
+        });
+    }
+    function gapi_loaded() {
+        Promise.race([gapi.auth.authorize(dn.auth_map(true)), make_timeout(dn.const_.auth_timeout)])
+            .then(dn.pr_auth.resolve.bind(dn.pr_auth),
+                  dn.pr_auth.reject.bind(dn.pr_auth));
+        gapi.load('drive-realtime', dn.pr_realtime_loaded.resolve.bind(dn.pr_realtime_loaded));
+    } 
+    </script>
+    <script type="text/javascript" src="https://apis.google.com/js/client.js?onload=gapi_loaded"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.2.3/ace.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.2.3/ext-modelist.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.2.3/ext-themelist.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.2.3/ext-language_tools.js"></script>
+    <script type="text/javascript" src="all.build.js"></script>
+    <title>Drive Notepad</title>
+    <link rel="shortcut icon" type="image/x-icon" href="favicon.ico?">
+    <script>
+       // Google Analytics
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+      ga('create', 'UA-74999669-1', 'auto');
+      ga('set', 'title', 'app');
+      ga('set', 'page', document.location.pathname);
+      ga('send', 'pageview');
+    </script>
+    <meta name="description" content="View and edit plain-text files in your Google Drive™ without leaving your browser.  Drive Notepad is free to use, and provides syntax highlighting for many programming langugages, a find/replace tool, and interactive file-history explorer.">
+</head>
+
+<body class="noselect">
+
+    <div id="the_widget" class="the_widget noselect"> 
+        <div id="widget_pending" class="widget_pending" style="display:none;">
+            <div class="widget_pending_inner"></div>
+        </div>
+
+        <div class="widget_text" id="widget_text">ex nihilo omnia</div>
+
+        <div id='widget_menu' class='widget_menu'>
+            <div class='widget_menu_icon icon_menu_file' id='menu_file'></div>
+            <div class='widget_menu_icon icon_menu_find' id='menu_find'></div>
+            <div class='widget_menu_icon icon_menu_open' id='menu_open'></div>
+            <div class='widget_menu_icon icon_menu_general_settings' id='menu_general_settings'></div>
+            <div class='widget_menu_icon icon_menu_help' id='menu_help'></div>
+        </div>
+
+        <div class="widget_content" id="widget_content"> 
+            <div class='widget_pane' style='display:none;' id='pane_permissions'>
+                <div class='button_wrapper auth_button_wrapper'>
+                    <div class='button auth_button' id='button_auth' title="sign in to Google and/or grant permissions to Drive Notepad">Authorize...</div>
+                </div>
+            </div>
+
+
+            <div class='widget_pane' id='pane_file' style="display:none;">
+                <div class='widget_pane_inner' id="pane_file_history" style="display:none;">
+                    <div class='widget_box_title'>File History</div>
+                    <div class="pane_item">
+                        <div class="revision_caption_at" id="revision_caption_at"></div>
+                        <div class="revision_timeline">
+                            <input class="revision_at_range" id="revision_at_range" type="range" min="0" max="1" value="0"></input>
+                            <div class="revision_tick_box" id="revision_tick_box"></div>
+                            <input class="revision_from_range" id="revision_from_range" type="range" min="0" max="1" value="0"></input>
+                        </div>
+                        <div class="revision_caption_from" id="revision_caption_from"></div>
+                    </div>
+                    <div class="pane_item" style="display:none;">
+                        <!--TODO: reimplement this functionality-->
+                        Removed lines:
+                        <div class='button inline_button selected' id='revisions_remove_expand'>expand</div>
+                        <div class='button inline_button' id='revisions_remove_collapse'>collapse</div>
+                    </div>
+                    <div class="pane_item no_select" id='revision_info'>Initialising...</div>
+                </div>
+                <div class='widget_pane_inner' id="pane_file_main">
+                    <div class='pane_item clickable'>
+                        <div class='details_file_title_text' id='details_file_title_text' title="click to edit">
+                            Title: <span class="editable_text" id='details_file_title_text_inner'></span>
+                        </div>
+                        <input type='text' placeholder='title' class='details_file_title_input' id='details_file_title_input' style='display:none;'/>
+                    </div>
+                    <div class='pane_item  clickable'>
+                        <div class='details_file_description_text' id='details_file_description_text' title="click to edit">
+                            Description: <span class="editable_text" id='details_file_description_text_inner'></span>
+                        </div>
+                        <textarea placeholder='description' class='details_file_description_input' id='details_file_description_input' style='display:none;'></textarea>
+                    </div>
+                    <div class='pane_spacer'></div>
+                    <div class='pane_item'>
+                        Syntax:
+                        <div class='button inline_button' id='file_ace_mode_detect'>detect</div>
+                        <div class='button inline_button dropdown_button' id='file_ace_mode_choose'></div>
+                        <div class='file_info' id='file_ace_mode_info'></div>
+                    </div>
+                    <div class='pane_spacer'></div>
+                    <div class='pane_item'>
+                        Newline:
+                        <div class='button inline_button' id='file_newline_detect'>detect</div>
+                        <div class='button inline_button' id='file_newline_windows'>windows</div>
+                        <div class='button inline_button' id='file_newline_unix'>unix</div>
+                        <div class='file_info' id='file_newline_info'></div>
+                    </div>
+                    <div class='pane_spacer'></div>
+                    <div class='pane_item'>
+                        Tabs:
+                        <div class='button inline_button' id='file_tab_detect'>detect</div>
+                        <div class='button inline_button' id='file_tab_hard'>hard</div>
+                        <div class='button inline_button' id='file_tab_soft'>
+                            <span id='file_tab_soft_text'>??</span> spaces
+                            <div class='button_up_down_wrapper'>
+                                <div class='button_up' id='file_tab_soft_inc'>&nbsp;</div>
+                                <div class='button_down' id='file_tab_soft_dec'>&nbsp;</div>
+                            </div>
+                        </div>
+                        <div class='file_info' id='file_tab_info'></div>
+                    </div>
+                </div>
+                <div class='widget_pane_bottom_before'></div>
+                <div class='widget_pane_bottom'>
+                    <span class='file_info_overflow' id='file_info_overflow' style="display:none;">history tool is in development</span>
+                    <div class='button icon button_save' id='button_save' title='save file'></div>
+                    <div class='button icon button_print' id='button_print' title='print...'></div>
+                    <div class='button icon button_share' id='button_share' title="file share settings..."></div>
+                    <div class='button icon button_history' id='button_history' title="history of changes..."></div>
+                </div>
+            </div>
+
+            <div class='widget_pane' style='display:none;' id='pane_general_settings'>
+                <div class='pane_item'>
+                    Recent changes: 
+                    <div class='button inline_button' id='gutter_history_hide'>hide</div>
+                    <div class='button inline_button' id='gutter_history_show'>show</div>
+                </div>
+                <div class='pane_item'>
+                    Word wrap:
+                    <div class='button inline_button' id='word_wrap_off'>none</div>
+                    <div class='button inline_button' id='word_wrap_at'>
+                        at <span id='word_wrap_at_text'>??</span>
+                        <div class='button_up_down_wrapper'>
+                            <div class='button_up' id='word_wrap_at_inc'>&nbsp;</div>
+                            <div class='button_down' id='word_wrap_at_dec'>&nbsp;</div>
+                        </div>
+                    </div>
+                    <div class='button inline_button' id='word_wrap_edge'>edge</div>
+                </div>
+                <div class='pane_item'>
+                    Tab default:
+                    <div class='button inline_button' id='tab_hard'>hard</div>
+                    <div class='button inline_button' id='tab_soft'>
+                        <span id='tab_soft_text'>??</span> spaces
+                        <div class='button_up_down_wrapper'>
+                            <div class='button_up' id='tab_soft_inc'>&nbsp;</div>
+                            <div class='button_down' id='tab_soft_dec'>&nbsp;</div>
+                        </div>
+                    </div>
+                </div>  
+                <div class='pane_item'>
+                    Newline default:
+                    <div class='button inline_button' id='newline_menu_windows'>windows</div>
+                    <div class='button inline_button' id='newline_menu_unix'>unix</div>
+                </div>
+                <div class='pane_item'>
+                    Font size:
+                    <div class='button_like'><span id='font_size_text'>??</span> em
+                        <div class='button_up_down_wrapper'>
+                            <div class='button_up' id='font_size_inc'></div>
+                            <div class='button_down' id='font_size_dec'></div>
+                        </div>
+                    </div>
+                </div>
+                <div class='pane_item'>
+                    Theme:
+                    <div class='button inline_button dropdown_button no_select' id='theme_chooser'></div>
+                    <div class='dropdown_valign_fix'>&nbsp;</div>
+                </div>
+                <div class='widget_pane_bottom_before'></div>
+                <div class='widget_pane_bottom'>
+                    <div class='button icon button_clear_clipboard' id='button_clear_clipboard' title="clear clipboard history"></div>
+                    <div class='button icon button_clear_find_replace' id='button_clear_find_replace' title="clear find/replace history"></div>
+                </div>
+            </div>
+
+            <div class='widget_pane' style='display:none;' id='pane_find'>
+                <div class='pane_item input no_select' id='find_find_wrapper'>
+                    <input tabindex='1' placeholder='find text' id='find_input' tabindex="101"></input>
+                    <div class='button inline_button' id='button_find_case_sensitive' title='case sensitive search'>Aa</div>
+                    <div class='button inline_button' id='button_find_whole_words' title='match whole words'><sup>&#9141;</sup></div>
+                    <div class='button inline_button' id='button_find_regex' title="use regular expressions">.*</div>
+                </div>
+                <div class='pane_item input no_select' style='display:none;' id='find_replace_wrapper'>
+                    <input tabindex='1' placeholder='replace text' id='find_replace_input' tabindex="102" title="Enter to replace. Ctrl-Enter to replace all"></input>
+                    <div class='button inline_button inline_button_tripple' id='button_find_replace_all' title='replace all'>replace all</div>
+                </div>
+                <div class='pane_item' style="display:none;" id='find_goto_wrapper'>
+                    <input class='gotoline_input' id='goto_input' placeholder='line number'></input>
+                </div>
+                <div class='pane_item no_select find_results' id='find_results'></div>
+                <div class='pane_item no_select find_info' id='find_info'>search inactive</div>
+                <div class='widget_pane_bottom_before'></div>
+                <div class='widget_pane_bottom'>
+                    <span class='find_info_overflow' id='find_info_overflow'></span>
+                    <div class='button icon icon_goto' id='button_goto' title="goto line mode"></div>
+                    <div class='button icon icon_replace' id='button_replace' title="replace mode"></div>
+                </div>
+
+            </div>
+
+            <div class='widget_pane' id='pane_help'>
+                <div class='widget_pane_inner' id='pane_help_main'>
+                    <div class='widget_box_title'>Drive Notepad 2016a, by DM.</div>
+                    <a class='pane_item clickable link_google' href='https://plus.google.com/communities/107691649945880497995' target="_blank">
+                        <div class='wiget_item_icon icon_bug'></div> give feedback (good or bad)
+                    </a>
+                    <a class='pane_item clickable link_youtube' href='https://www.youtube.com/watch?v=JhV-8L7Kkvk' target='_blank'>
+                        <div class='wiget_item_icon icon_demo'></div> view a quick demo
+                    </a>
+                    <a class='pane_item clickable link_about' href='/' target='_blank'>
+                        <div class='wiget_item_icon icon_about'></div> go to Drive Notepad website
+                    </a><br>
+                    <div class='widget_box_title'>Logged in as <span id='user_name'>???</span></div>
+                    <a class='pane_item clickable link_drive' href='https:\\drive.google.com' target="_blank">
+                        <div class='wiget_item_icon icon_drive'></div> open your Google Drive
+                    </a>
+                </div>
+                <div class='widget_pane_inner' id='pane_help_tips' style="display:none;">
+                    <div class='pane_item no_select' id='tips_general'>
+                        Drag this widget to reposition it. Click it or press Esc to toggle it open/close. All of the program's controls are contained within the widget's five tabs. <br><br>
+                        Changes are not saved as you type: use the save button in the file tab or <span class='ctrl_key'>ctrl</span>-s.<br><br>
+                        The help tab gives keyboard shortcuts, links for reporting bugs etc., and the option to view these tips again.
+                    </div>
+                    <div class='pane_item no_select' id='tips_old_user' style="display:none;">
+                        Drive Notepad has changed a bit.  It's also moved from appspot.com to github.io.<br><br>
+                        The stability, performance, and usability of the application have (hopefully) been improved. However, if you do encounter bugs or other other issues please report them as soon as possible.<br><br>
+                        Click the lightbulb button below to close this message.
+                    </div>
+                </div>
+                <div class='widget_pane_inner' id='pane_help_shortcuts' style="display:none;">
+                    <div class='widget_box_title'>Keyboard Shortcuts</div>
+                </div>
+                <div class='widget_pane_bottom_before'></div>
+                <div class='widget_pane_bottom'>
+                    <div class='button icon icon_tips' id='button_view_tips' title="view tips"></div>
+                    <div class='button icon icon_shortcuts' id='button_view_shortcuts' title="view keyboard shorcuts"></div>
+                </div>
+            </div>
+
+            <div class='widget_pane' style='display:none;' id='pane_open'>
+                <div class='pane_item'>Open an existing file in:<br><br>
+                    <div class='button_wrapper'>
+                        <div class='button'id='opener_button_a'>this tab</div>
+                        <a class='button' id='opener_button_b' href="https://drive.google.com" target="_blank">a new tab</a>
+                    </div><br>
+                </div>
+                <div class='pane_item'>Create a new file in:<br><br>
+                    <div class='button_wrapper'>
+                        <a class='button' id='opener_button_c' href='?state={"action":"create","folderId":"","ext":""}'>this tab</a>
+                        <a class='button' id='opener_button_d' href='?state={"action":"create","folderId":"","ext":""}' target="_blank">a new tab</a>
+                    </div><br>
+                </div>
+            </div>
+
+            <div class='widget_pane' style='display:none;' id='pane_clipboard'>
+                <div class='widget_box_title'>About the clipboard</div>
+                <div class='pane_item no_select'>
+                When you paste with <span class='ctrl_key'>ctrl</span>-v you can cycle through your Drive Notepad clipboard
+                by pressing 'left' or 'right' before releaing the <span class='ctrl_key'>ctrl</span> key. <br><br>
+                You can clear your clipboard history by clicking the relevant button in the general settings tab.
+                </div>
+            </div>
+
+        </div>
+
+        <div class="widget_error" id="widget_error">
+            <div class="widget_error_mark">&#x2718;</div><div class="widget_error_text" id="widget_error_text">Javascript disabled or encountering errors.</div>
+        </div>
+
+    </div>
+
+    <div class="the_editor" id="the_editor"> </div>
+    <div class="revisions_view" id="revisions_view" style="display: none;"></div>
+    
+</body>
+</html>

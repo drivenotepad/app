@@ -1,0 +1,86 @@
+/*  Note that the data on this page is trusted, i.e. it is not escaped when used */
+
+(function(){
+	
+
+	var data = [
+
+		{
+		width: 160,
+		height: 600,
+		alt: "",
+		href: "http://www.kqzyfj.com/click-8032815-11139959-1358368119000",
+		img: "https://www.lduhtrp.net/image-8032815-11139959-1358368119000",
+		ga_id: 2
+		},
+
+		{
+		width: 160,
+		height: 600,
+		alt: "Green Man Gaming - Load, Play, Trade !",
+		href: "http://www.tkqlhce.com/click-8032815-12115797-1456738702000",
+		img: "https://www.lduhtrp.net/image-8032815-12115797-1456738702000",
+		ga_id: 3
+		},
+
+		{
+		width: 160,
+		height: 600,
+		alt: "Great Games - Better Prices - Shop like a Boss",
+		href: "http://www.anrdoezrs.net/click-8032815-12467804-1456738702000",
+		img: "https://www.tqlkg.com/image-8032815-12467804-1456738702000",
+		ga_id: 4
+		},
+
+		{
+		width: 160,
+		height: 600,
+		alt: "",
+		href: "http://www.jdoqocy.com/click-8032815-12193127-1444339039000",
+		img: "https://www.awltovhc.com/image-8032815-12193127-1444339039000",
+		ga_id: 5
+		},
+
+		{
+		width: 120,
+		height: 600,
+		alt: "",
+		href: "http://www.kqzyfj.com/click-8032815-11410216-1446809454000",
+		img: "https://www.awltovhc.com/image-8032815-11410216-1446809454000",
+		ga_id: 6
+		},
+
+		{
+		width: 160,
+		height: 600,
+		alt: "",
+		href: "http://www.tkqlhce.com/click-8032815-12229803-1433342091000",
+		img: "https://www.tqlkg.com/image-8032815-12229803-1433342091000",
+		ga_id: 7
+		},
+
+		{
+		width: 161,
+		height: 600,
+		alt: "Drive Notepad in the Chrome Webstore",
+		href: "https://chrome.google.com/webstore/detail/drive-notepad/gpgjomejfimnbmobcocilppikhncegaj",
+		img: "https://drivenotepad.github.io/images/dn_review_ad.png",
+		ga_id: 8
+		},
+
+		{
+		width: 120,
+		height: 600,
+		alt: "",
+		href: "http://www.tkqlhce.com/click-8032815-10777950-1420040554000",
+		img: "https://www.ftjcfx.com/image-8032815-10777950-1420040554000",
+		ga_id: 9
+		}
+
+	]
+
+
+
+	dn.ads.on_load_data(data);
+
+})();

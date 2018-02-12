@@ -1,0 +1,24 @@
+{
+  "name": "drivenotepad",
+  "version": "3.0.0",
+  "main": "app.html",
+  "scripts": {
+    "build": "cleancss css/app.css -o app.build.css && uglifyjs node_modules/keymaster/keymaster.js js/patch_ace.js js/utils.js js/offline_simple.js js/drop_down.js js/info.js js/file_model.js js/settings_pane.js js/open_pane.js js/help_pane.js js/using_apis.js js/clipboard.js js/save.js js/print.js js/file_pane.js js/patch_ace_history.js js/history_tool.js js/find_pane.js js/keyboard.js js/app.js -o all.build.js --source-map all.build.map.js --source-map-include-sources --screw-ie8v && html-minifier html/app.html -o index.html --minify-js --collapse-whitespace --conservative-collapse"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/drivenotepad/app.git"
+  },
+  "author": "D.M.",
+  "bugs": {
+    "url": "https://github.com/drivenotepad/app/issues"
+  },
+  "homepage": "https://drivenotepad.github.com",
+  "devDependencies": {
+    "clean-css-cli": "^4.1.10",
+    "es6-promise": "^3.1.2",
+    "html-minifier": "^1.2.0",
+    "keymaster": "^1.6.2",
+    "uglify-js": "^2.6.2"
+  }
+}
