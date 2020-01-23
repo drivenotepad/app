@@ -1,3 +1,6 @@
+# JAN 2020: THIS PROJECT HAS BEEN SUPERSEDED BY TEXTEDITOR.CO
+Please see https://texteditor.co/ for more details.
+
 # Drive Notepad
 
 A webapp for editing text files in Google Drive, implemented entirely on the client-side.
