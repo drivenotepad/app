@@ -1,0 +1,25 @@
+# use regexp syntax
+#-------------------
+syntax: regexp
+
+# use glob syntax
+#----------------
+syntax: glob
+
+# Ignore Thumbs.db files
+Thumbs.db
+
+
+# Ignore log, backup and temporary files
+*.log
+*.tmp
+*.bak
+
+# Ignore node modules and builds
+node_modules/
+build/
+
+# Ignore original and rejected files
+*.rej
+*.orig
+

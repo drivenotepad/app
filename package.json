@@ -15,7 +15,7 @@
   },
   "homepage": "https://drivenotepad.github.com",
   "devDependencies": {
-    "clean-css": "^3.4.10",
+    "clean-css-cli": "^4.1.10",
     "es6-promise": "^3.1.2",
     "html-minifier": "^1.2.0",
     "keymaster": "^1.6.2",

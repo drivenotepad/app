@@ -79,6 +79,7 @@ dn.is_auth_error = function(err){
 }
 
 dn.api_error_to_string = function(err){
+
     if(!err)
         return "Error.";
     var reason = ""
@@ -98,6 +99,19 @@ dn.api_error_to_string = function(err){
 }
 
 dn.handle_auth_error = function(err){
+
+    console.dir("ERROR: "+JSON.stringify(err));
+    if(!err.status.signed_in){
+        console.dir("ERROR user not signed in: "+JSON.stringify(err));
+
+        return dn.toggle_permission(true);
+
+
+        if(!err.status.google_logged_in){
+            dn.reauth_auto();
+        }
+    }
+    
     // this is the error handler for dn.pr_auth
 
     dn.status.authorization = -1;
