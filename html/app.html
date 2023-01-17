@@ -5,10 +5,11 @@
     <link rel="stylesheet" href="app.build.css">
 
     <script type="text/javascript">
-    "use strict";
+        "use strict";
+        // test fork
 
     // conditional synchrounous script loading of polyfills, for IE11 (IE 10 and below not supported)
-    if(!window.Promise){
+        if (!window.Promise) {
         var r = new XMLHttpRequest();
         r.open('GET', 'polyfill/es6-promise.min.js', false);
         r.send();
